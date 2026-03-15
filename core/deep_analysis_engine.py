@@ -74,7 +74,15 @@ def _get_strong_model() -> str:
     except Exception:
         pass
     if os.getenv("ANTHROPIC_API_KEY"):
-        return "claude-sonnet-4-5-20250929"
+        try:
+            from core.config_manager import ConfigManager
+            cm = ConfigManager()
+            model = getattr(cm.config, 'anthropic_analysis_model', 'claude-sonnet-4-5-20250929')
+            print(f"🔍 DEBUG: Loaded anthropic_analysis_model from config: {model}")
+            return model
+        except Exception as e:
+            print(f"⚠️ DEBUG: Failed to load config: {e}")
+            return "claude-sonnet-4-5-20250929"
     return "gpt-4.1-2025-04-14"
 
 
@@ -114,7 +122,12 @@ def _get_model_for_pass(pass_number: int) -> str:
     if pass_number == 3:
         # Invariant analysis -- prefer Anthropic for reasoning depth
         if has_anthropic:
-            return "claude-sonnet-4-5-20250929"
+            try:
+                from core.config_manager import ConfigManager
+                cm = ConfigManager()
+                return getattr(cm.config, 'anthropic_analysis_model', 'claude-sonnet-4-5-20250929')
+            except Exception:
+                return "claude-sonnet-4-5-20250929"
         if has_openai:
             return "gpt-4.1-2025-04-14"
         return _get_strong_model()
@@ -124,7 +137,12 @@ def _get_model_for_pass(pass_number: int) -> str:
         if has_openai:
             return "gpt-4.1-2025-04-14"
         if has_anthropic:
-            return "claude-sonnet-4-5-20250929"
+            try:
+                from core.config_manager import ConfigManager
+                cm = ConfigManager()
+                return getattr(cm.config, 'anthropic_analysis_model', 'claude-sonnet-4-5-20250929')
+            except Exception:
+                return "claude-sonnet-4-5-20250929"
         return _get_strong_model()
 
     # Pass 5: Adversarial modeling -- strongest available

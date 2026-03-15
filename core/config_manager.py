@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Configuration Manager for AetherAudit
-
+ CHANGED provider = failover anthropic insteaad of openai
 Manages tool configurations, user preferences, and environment settings.
 """
 
@@ -18,6 +18,7 @@ from rich.console import Console
 @dataclass
 class ToolConfig:
     """Configuration for a specific security tool."""
+
     name: str
     enabled: bool = True
     timeout: int = 300
@@ -63,9 +64,9 @@ class AetherConfig:
 
     # Model Provider Selection (per task type)
     # Choose which provider to use for each task: "openai", "gemini", or "anthropic"
-    validation_provider: str = "gemini"   # Provider for validation (false positive filtering) - Gemini has 2M TPM vs OpenAI's 30K
-    analysis_provider: str = "openai"     # Provider for vulnerability analysis
-    generation_provider: str = "openai"   # Provider for PoC/test generation
+    validation_provider: str = "gemini"  # Provider for validation (false positive filtering) - Gemini has 2M TPM vs OpenAI's 30K
+    analysis_provider: str = "openai"  # Provider for vulnerability analysis
+    generation_provider: str = "openai"  # Provider for PoC/test generation
 
     # OpenAI Model selection - Different models for different purposes
     # Validation model (for false positive filtering) - needs highest accuracy
@@ -95,15 +96,25 @@ class AetherConfig:
 
     # AI Ensemble Agent Models (individual specialist agents)
     # Each agent can use a different model for specialized analysis
-    agent_gpt5_security_model: str = "gpt-5-chat-latest"      # Security vulnerability auditor
-    agent_gpt5_defi_model: str = "gpt-5-chat-latest"          # DeFi protocol specialist
-    agent_gemini_security_model: str = "gemini-2.5-flash"     # Gemini security hunter (2M context)
-    agent_gemini_verification_model: str = "gemini-2.5-pro"   # Formal verification (use Pro for best quality)
-    agent_anthropic_security_model: str = "claude-opus-4-6"   # Anthropic security auditor (deep analysis)
-    agent_anthropic_reasoning_model: str = "claude-opus-4-6"  # Anthropic reasoning specialist (extended thinking)
-    
+    agent_gpt5_security_model: str = (
+        "gpt-5-chat-latest"  # Security vulnerability auditor
+    )
+    agent_gpt5_defi_model: str = "gpt-5-chat-latest"  # DeFi protocol specialist
+    agent_gemini_security_model: str = (
+        "gemini-2.5-flash"  # Gemini security hunter (2M context)
+    )
+    agent_gemini_verification_model: str = (
+        "gemini-2.5-pro"  # Formal verification (use Pro for best quality)
+    )
+    agent_anthropic_security_model: str = (
+        "claude-opus-4-6"  # Anthropic security auditor (deep analysis)
+    )
+    agent_anthropic_reasoning_model: str = (
+        "claude-opus-4-6"  # Anthropic reasoning specialist (extended thinking)
+    )
+
     max_tokens: int = 4000
-    
+
     # Triage/LLM settings
     triage_min_severity: str = "medium"
     triage_min_confidence: float = 0.40
@@ -124,7 +135,7 @@ class AetherConfig:
     halmos_timeout: int = 120  # seconds per test function
     halmos_loop_bound: int = 3
     halmos_solver_timeout_ms: int = 30000
-    
+
     # Etherscan API settings
     etherscan_api_key: str = ""
     etherscan_base_url: str = "https://api.etherscan.io/v2/api"
@@ -132,31 +143,31 @@ class AetherConfig:
     def __post_init__(self):
         if self.tools is None:
             self.tools = {
-                'pattern': ToolConfig('pattern', True, 60),
-                'llm': ToolConfig('llm', True, 120)
+                "pattern": ToolConfig("pattern", True, 60),
+                "llm": ToolConfig("llm", True, 120),
             }
 
 
 def get_model_for_task(task_type: str) -> str:
     """Get the configured model for a specific task type.
-    
+
     Args:
         task_type: One of 'validation', 'analysis', or 'generation'
-    
+
     Returns:
         The model name to use (e.g., 'gpt-5-chat-latest' or 'gemini-2.5-flash')
     """
     try:
         config_manager = ConfigManager()
-        
+
         # Get the provider for this task
         provider_attr = f"{task_type}_provider"
-        provider = getattr(config_manager.config, provider_attr, "openai")
-        
+        provider = getattr(config_manager.config, provider_attr, "anthropic")
+
         # Get the model from the appropriate provider
         model_attr = f"{provider}_{task_type}_model"
         model = getattr(config_manager.config, model_attr, None)
-        
+
         # Fallback logic
         if not model:
             if provider == "gemini":
@@ -164,12 +175,20 @@ def get_model_for_task(task_type: str) -> str:
             elif provider == "anthropic":
                 model = "claude-sonnet-4-5-20250929"
             else:
-                model = "gpt-5-chat-latest" if task_type == "validation" or task_type == "analysis" else "gpt-5-mini"
-        
+                model = (
+                    "gpt-5-chat-latest"
+                    if task_type == "validation" or task_type == "analysis"
+                    else "gpt-5-mini"
+                )
+
         return model
     except Exception:
         # Ultimate fallback
-        return "gpt-5-chat-latest" if task_type == "validation" or task_type == "analysis" else "gpt-5-mini"
+        return (
+            "gpt-5-chat-latest"
+            if task_type == "validation" or task_type == "analysis"
+            else "gpt-5-mini"
+        )
 
 
 class ConfigManager:
@@ -189,33 +208,36 @@ class ConfigManager:
         """Load configuration from file."""
         if self.config_file.exists():
             try:
-                with open(self.config_file, 'r') as f:
+                with open(self.config_file, "r") as f:
                     data = yaml.safe_load(f)
 
                 if data:
                     # Update config with loaded data
                     for key, value in data.items():
                         if hasattr(self.config, key):
-                            if key == 'tools' and isinstance(value, dict):
+                            if key == "tools" and isinstance(value, dict):
                                 # Handle tools configuration
                                 tools_dict = {}
                                 for tool_name, tool_data in value.items():
                                     if isinstance(tool_data, dict):
                                         # Remove 'name' from tool_data if it exists to avoid duplicate argument
                                         tool_data_copy = tool_data.copy()
-                                        tool_data_copy.pop('name', None)
+                                        tool_data_copy.pop("name", None)
                                         tools_dict[tool_name] = ToolConfig(
-                                            name=tool_name,
-                                            **tool_data_copy
+                                            name=tool_name, **tool_data_copy
                                         )
                                     else:
-                                        tools_dict[tool_name] = ToolConfig(tool_name, enabled=tool_data)
+                                        tools_dict[tool_name] = ToolConfig(
+                                            tool_name, enabled=tool_data
+                                        )
                                 setattr(self.config, key, tools_dict)
                             else:
                                 setattr(self.config, key, value)
 
             except Exception as e:
-                self.console.print(f"[yellow]Warning: Could not load config file: {e}[/yellow]")
+                self.console.print(
+                    f"[yellow]Warning: Could not load config file: {e}[/yellow]"
+                )
                 self._create_default_config()
 
     def save_config(self) -> None:
@@ -225,19 +247,21 @@ class ConfigManager:
             config_dict = asdict(self.config)
 
             # Convert ToolConfig objects to dicts
-            if 'tools' in config_dict and config_dict['tools']:
+            if "tools" in config_dict and config_dict["tools"]:
                 tools_dict = {}
-                for tool_name, tool_config in config_dict['tools'].items():
+                for tool_name, tool_config in config_dict["tools"].items():
                     if isinstance(tool_config, ToolConfig):
                         tools_dict[tool_name] = asdict(tool_config)
                     else:
                         tools_dict[tool_name] = tool_config
-                config_dict['tools'] = tools_dict
+                config_dict["tools"] = tools_dict
 
-            with open(self.config_file, 'w') as f:
+            with open(self.config_file, "w") as f:
                 yaml.dump(config_dict, f, default_flow_style=False, indent=2)
 
-            self.console.print(f"[green]✓ Configuration saved to {self.config_file}[/green]")
+            self.console.print(
+                f"[green]✓ Configuration saved to {self.config_file}[/green]"
+            )
 
         except Exception as e:
             self.console.print(f"[red]✗ Failed to save config: {e}[/red]")
@@ -293,8 +317,12 @@ class ConfigManager:
         main_table.add_row("Output Directory", self.config.output_dir)
         main_table.add_row("Reports Directory", self.config.reports_dir)
         main_table.add_row("Max Analysis Time", f"{self.config.max_analysis_time}s")
-        main_table.add_row("Parallel Analysis", "Yes" if self.config.parallel_analysis else "No")
-        main_table.add_row("Bug Bounty Mode", "Yes" if self.config.bug_bounty_mode else "No")
+        main_table.add_row(
+            "Parallel Analysis", "Yes" if self.config.parallel_analysis else "No"
+        )
+        main_table.add_row(
+            "Bug Bounty Mode", "Yes" if self.config.bug_bounty_mode else "No"
+        )
 
         self.console.print(main_table)
 
@@ -318,22 +346,41 @@ class ConfigManager:
         triage_table = Table(title="🗂 Triage & LLM Settings")
         triage_table.add_column("Setting", style="cyan")
         triage_table.add_column("Value", style="green")
-        triage_table.add_row("triage_min_severity", str(self.config.triage_min_severity))
-        triage_table.add_row("triage_min_confidence", str(self.config.triage_min_confidence))
+        triage_table.add_row(
+            "triage_min_severity", str(self.config.triage_min_severity)
+        )
+        triage_table.add_row(
+            "triage_min_confidence", str(self.config.triage_min_confidence)
+        )
         triage_table.add_row("triage_max_items", str(self.config.triage_max_items))
-        triage_table.add_row("triage_max_per_type", str(self.config.triage_max_per_type))
-        triage_table.add_row("llm_only_consensus", "Yes" if self.config.llm_only_consensus else "No")
-        triage_table.add_row("llm_triage_min_severity", str(self.config.llm_triage_min_severity))
-        triage_table.add_row("llm_triage_min_confidence", str(self.config.llm_triage_min_confidence))
-        triage_table.add_row("llm_triage_max_items", str(self.config.llm_triage_max_items))
-        triage_table.add_row("llm_triage_max_per_type", str(self.config.llm_triage_max_per_type))
+        triage_table.add_row(
+            "triage_max_per_type", str(self.config.triage_max_per_type)
+        )
+        triage_table.add_row(
+            "llm_only_consensus", "Yes" if self.config.llm_only_consensus else "No"
+        )
+        triage_table.add_row(
+            "llm_triage_min_severity", str(self.config.llm_triage_min_severity)
+        )
+        triage_table.add_row(
+            "llm_triage_min_confidence", str(self.config.llm_triage_min_confidence)
+        )
+        triage_table.add_row(
+            "llm_triage_max_items", str(self.config.llm_triage_max_items)
+        )
+        triage_table.add_row(
+            "llm_triage_max_per_type", str(self.config.llm_triage_max_per_type)
+        )
         self.console.print(triage_table)
 
         # Foundry settings table
         foundry_table = Table(title="🔨 Foundry Settings")
         foundry_table.add_column("Setting", style="cyan")
         foundry_table.add_column("Value", style="green")
-        foundry_table.add_row("foundry_only_consensus", "Yes" if self.config.foundry_only_consensus else "No")
+        foundry_table.add_row(
+            "foundry_only_consensus",
+            "Yes" if self.config.foundry_only_consensus else "No",
+        )
         foundry_table.add_row("foundry_max_items", str(self.config.foundry_max_items))
         self.console.print(foundry_table)
 
@@ -347,17 +394,17 @@ class ConfigManager:
         # Main settings
         self.console.print("\n[bold]Main Settings:[/bold]")
 
-        if self.console.input("Change workspace directory? (y/N): ").lower() == 'y':
+        if self.console.input("Change workspace directory? (y/N): ").lower() == "y":
             workspace = self.console.input("Workspace directory: ")
             if workspace:
                 self.config.workspace = workspace
 
-        if self.console.input("Change output directory? (y/N): ").lower() == 'y':
+        if self.console.input("Change output directory? (y/N): ").lower() == "y":
             output_dir = self.console.input("Output directory: ")
             if output_dir:
                 self.config.output_dir = output_dir
 
-        if self.console.input("Enable bug bounty mode? (y/N): ").lower() == 'y':
+        if self.console.input("Enable bug bounty mode? (y/N): ").lower() == "y":
             self.config.bug_bounty_mode = True
             self.config.include_exploit_pocs = True
             self.config.include_impact_analysis = True
@@ -369,16 +416,20 @@ class ConfigManager:
         for tool_name in self.config.tools.keys():
             current_config = self.config.tools[tool_name]
 
-            if self.console.input(f"Configure {tool_name}? (y/N): ").lower() == 'y':
-                enabled = self.console.input(f"Enable {tool_name}? (Y/n): ").lower() != 'n'
+            if self.console.input(f"Configure {tool_name}? (y/N): ").lower() == "y":
+                enabled = (
+                    self.console.input(f"Enable {tool_name}? (Y/n): ").lower() != "n"
+                )
                 current_config.enabled = enabled
 
-                timeout_str = self.console.input(f"Timeout for {tool_name} (seconds, current: {current_config.timeout}): ")
+                timeout_str = self.console.input(
+                    f"Timeout for {tool_name} (seconds, current: {current_config.timeout}): "
+                )
                 if timeout_str.isdigit():
                     current_config.timeout = int(timeout_str)
 
         # Save configuration
-        if self.console.input("Save configuration? (Y/n): ").lower() != 'n':
+        if self.console.input("Save configuration? (Y/n): ").lower() != "n":
             self.save_config()
 
     def set_openai_key(self, api_key: str) -> None:
@@ -392,7 +443,7 @@ class ConfigManager:
         self.config.etherscan_api_key = api_key
         self.save_config()
         self.console.print("[green]✓ Etherscan API key configured[/green]")
-    
+
     def set_gemini_key(self, api_key: str) -> None:
         """Set Gemini API key for LLM features."""
         self.config.gemini_api_key = api_key
@@ -404,37 +455,38 @@ class ConfigManager:
         self.config.anthropic_api_key = api_key
         self.save_config()
         self.console.print("[green]✓ Anthropic API key configured[/green]")
-    
+
     def validate_openai_key(self, api_key: Optional[str] = None) -> tuple[bool, str]:
         """Validate OpenAI API key by making a test call.
-        
+
         Args:
             api_key: API key to validate. If None, uses configured key.
-            
+
         Returns:
             Tuple of (is_valid, message)
         """
         key_to_test = api_key or self.config.openai_api_key
-        
+
         if not key_to_test:
             return False, "No API key provided"
-        
-        if not key_to_test.startswith('sk-'):
+
+        if not key_to_test.startswith("sk-"):
             return False, "Invalid format (should start with 'sk-')"
-        
+
         try:
             from openai import OpenAI
+
             client = OpenAI(api_key=key_to_test)
-            
+
             # Make a minimal test call
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": "test"}],
-                max_tokens=5
+                max_tokens=5,
             )
-            
+
             return True, "Valid"
-        
+
         except Exception as e:
             error_msg = str(e)
             if "invalid" in error_msg.lower() or "incorrect" in error_msg.lower():
@@ -443,29 +495,32 @@ class ConfigManager:
                 return True, "Valid (but quota exceeded)"
             else:
                 return False, f"Validation failed: {error_msg[:100]}"
-    
+
     def validate_gemini_key(self, api_key: Optional[str] = None) -> tuple[bool, str]:
         """Validate Gemini API key by making a test call.
-        
+
         Args:
             api_key: API key to validate. If None, uses configured key.
-            
+
         Returns:
             Tuple of (is_valid, message)
         """
         key_to_test = api_key or self.config.gemini_api_key
-        
+
         if not key_to_test:
             return False, "No API key provided"
-        
+
         try:
             import httpx
-            
+
             # Test Gemini API with a minimal request
-            url = "https://generativelanguage.googleapis.com/v1beta/models?key=" + key_to_test
-            
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models?key="
+                + key_to_test
+            )
+
             response = httpx.get(url, timeout=10)
-            
+
             if response.status_code == 200:
                 return True, "Valid"
             elif response.status_code == 400:
@@ -474,10 +529,10 @@ class ConfigManager:
                 return False, "API key forbidden or restricted"
             else:
                 return False, f"Validation failed (status {response.status_code})"
-        
+
         except Exception as e:
             return False, f"Validation error: {str(e)[:100]}"
-    
+
     def validate_anthropic_key(self, api_key: Optional[str] = None) -> tuple[bool, str]:
         """Validate Anthropic API key by making a test call.
 
@@ -492,7 +547,7 @@ class ConfigManager:
         if not key_to_test:
             return False, "No API key provided"
 
-        if not key_to_test.startswith('sk-ant-'):
+        if not key_to_test.startswith("sk-ant-"):
             return False, "Invalid format (should start with 'sk-ant-')"
 
         try:
@@ -518,48 +573,50 @@ class ConfigManager:
             else:
                 return False, f"Validation failed: {error_msg[:100]}"
 
-    def validate_etherscan_key(self, api_key: Optional[str] = None, network: str = 'mainnet') -> tuple[bool, str]:
+    def validate_etherscan_key(
+        self, api_key: Optional[str] = None, network: str = "mainnet"
+    ) -> tuple[bool, str]:
         """Validate Etherscan API key by making a test call.
-        
+
         Args:
             api_key: API key to validate. If None, uses configured key.
             network: Network to test against (mainnet, polygon, arbitrum, base)
-            
+
         Returns:
             Tuple of (is_valid, message)
         """
         key_to_test = api_key or self.config.etherscan_api_key
-        
+
         if not key_to_test:
             return False, "No API key provided"
-        
+
         try:
             import httpx
-            
+
             # Test with a simple API call
             base_urls = {
-                'mainnet': 'https://api.etherscan.io/api',
-                'polygon': 'https://api.polygonscan.com/api',
-                'arbitrum': 'https://api.arbiscan.io/api',
-                'base': 'https://api.basescan.org/api'
+                "mainnet": "https://api.etherscan.io/api",
+                "polygon": "https://api.polygonscan.com/api",
+                "arbitrum": "https://api.arbiscan.io/api",
+                "base": "https://api.basescan.org/api",
             }
-            
-            base_url = base_urls.get(network, base_urls['mainnet'])
-            
+
+            base_url = base_urls.get(network, base_urls["mainnet"])
+
             url = f"{base_url}?module=stats&action=ethsupply&apikey={key_to_test}"
             response = httpx.get(url, timeout=10)
-            
+
             if response.status_code == 200:
                 data = response.json()
-                if data.get('status') == '1':
+                if data.get("status") == "1":
                     return True, "Valid"
-                elif 'invalid' in data.get('result', '').lower():
+                elif "invalid" in data.get("result", "").lower():
                     return False, "Invalid API key"
                 else:
                     return False, f"API returned: {data.get('result', 'Unknown error')}"
             else:
                 return False, f"HTTP {response.status_code}"
-        
+
         except Exception as e:
             return False, f"Validation error: {str(e)[:100]}"
 

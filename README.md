@@ -13,9 +13,33 @@ python aether.py
 
 主要修改 core\deep_analysis_engine.py 和 enhanced_llm_analyzer 里面提示词
 
+如果windows导致TUI curse不返回，用直接用法 
+  # Single file with all scans
+  python direct_cli.py audit contract.sol
 
-增加了直接用法 python direct_cli.py audit path/to/contract.sol
+  # Directory with all scans
+  python direct_cli.py audit-dir ./contracts
 
+  # Skip static analysis
+  python direct_cli.py audit contract.sol --no-static
+
+  # Only LLM analysis
+  python direct_cli.py audit-dir ./contracts --no-static --no-validation
+
+结果显示
+ # View all results
+  python view_db.py
+
+  # View last 10 results
+  python view_db.py --limit 10
+
+  # View only CRITICAL findings
+  python view_db.py --severity CRITICAL
+
+  # Combine filters
+  python view_db.py --severity HIGH --limit 5
+
+也许要让提示词防止被风险拒绝"Refuse to run"
   For your case (DeFi security analysis):
   Most likely #1 - Anthropic's filters see vulnerability analysis prompts and exploit code as potentially harmful. Try:
   - Rephrase prompts to emphasize "security research" and "defensive analysis"

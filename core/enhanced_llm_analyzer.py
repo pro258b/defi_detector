@@ -5,26 +5,7 @@ Implements validation and fact-checking to prevent false positives.
 below is moved out from prompt:
 
 
-CRITICAL: Your response must be valid JSON that can be parsed directly. Ensure:
-- All strings are properly quoted with double quotes
-- No trailing commas
-- All brackets and braces are properly closed
-- No unescaped quotes within string values
-- No explanatory text outside the JSON object
 
-**VALIDATION CHECKLIST:**
-Before reporting any vulnerability, verify:
-- [ ] The issue actually exists in the code
-- [ ] The issue can be exploited in practice (by external attackers, not just privileged users)
-- [ ] The issue is not a standard, secure pattern
-- [ ] The issue has concrete code evidence
-- [ ] The issue is not already mitigated by other mechanisms (access control, guards, etc.)
-- [ ] If inheritance is involved, parent class protections were verified
-- [ ] If SafeCast is used, revert-on-overflow is considered intentional
-- [ ] If function has onlyOwner/onlyRole, verify it's actually exploitable by non-privileged users
-- [ ] If try/catch suppresses errors, check for documented intent explaining why
-- [ ] If external call is balanceOf/allowance/totalSupply, it's a read-only operation (not a trust issue)
-- [ ] If flash loan is mentioned, verify it's actual execution not just configuration
 """
 
 import os
@@ -168,6 +149,11 @@ class EnhancedLLMAnalyzer:
                 "⚠️  No API keys found in environment or config - LLM features disabled"
             )
 
+    def _is_anthropic_model(self, model: str):
+        return model.startswith("claude-") or (
+            hasattr(self, "anthropic_base_url") and self.anthropic_base_url
+        )
+
     async def analyze_vulnerabilities(
         self,
         contract_content: str,
@@ -235,8 +221,9 @@ class EnhancedLLMAnalyzer:
 
         # Reserve space for output based on model capabilities
         is_gpt5 = self.model.startswith("gpt-5")
-        is_gemini = self.model.startswith("gemini-")
-        is_anthropic = self.model.startswith("claude-")
+
+        is_anthropic = self._is_anthropic_model(self.model)
+        is_gemini = self.model.startswith("gemini-") and not is_anthropic
 
         if is_gemini:
             reserved_tokens = 12000  # 12K for thinking + output
@@ -413,6 +400,17 @@ Provide a structured JSON response with ONLY verified vulnerabilities:
 - code_snippet: The exact vulnerable code lines copied from the contract
 
 
+**VALIDATION CHECKLIST:**
+Before reporting any vulnerability, verify:
+- [ ] The issue can be exploited in practice (by external attackers, not just privileged users)
+- [ ] The issue is not already mitigated by other mechanisms (access control, guards, etc.)
+- [ ] If inheritance is involved, parent class protections were verified
+- [ ] If SafeCast is used, revert-on-overflow is considered intentional
+- [ ] If function has onlyOwner/onlyRole, verify it's actually exploitable by non-privileged users
+- [ ] If try/catch suppresses errors, check for documented intent explaining why
+- [ ] If external call is balanceOf/allowance/totalSupply, it's a read-only operation (not a trust issue)
+- [ ] If flash loan is mentioned, verify it's actual execution not just configuration
+
 **IMPORTANT**: If no real vulnerabilities are found, return an empty vulnerabilities array. It's better to miss a vulnerability than to report a false positive.
 """
 
@@ -438,13 +436,13 @@ Provide a structured JSON response with ONLY verified vulnerabilities:
         for current_model in models_to_try:
             try:
                 # Check if this is a Gemini or Anthropic model
-                is_gemini = current_model.startswith("gemini-")
-                is_anthropic = current_model.startswith("claude-")
+                is_anthropic = self._is_anthropic_model(current_model)
+                is_gemini = self.model.startswith("gemini-") and not is_anthropic
 
                 # Skip if we don't have the right API key (doesn't count as attempt)
-                if is_gemini and not self.gemini_api_key:
+                if is_anthropic and not self.anthropic_api_key:
                     continue
-                elif is_anthropic and not self.anthropic_api_key:
+                elif is_gemini and not self.gemini_api_key:
                     continue
                 elif not is_gemini and not is_anthropic and not self.api_key:
                     continue
@@ -674,6 +672,13 @@ Provide a structured JSON response with ONLY verified vulnerabilities:
         try:
             if not self.anthropic_client:
                 return None
+
+            print(f"🔍 DEBUG: Calling Anthropic API")
+            print(f"   Model: {model}")
+            print(
+                f"   Base URL: {getattr(self.anthropic_client, '_base_url', 'default')}"
+            )
+            print(f"   Max tokens: {max_tokens}")
 
             response = await asyncio.to_thread(
                 self.anthropic_client.messages.create,
