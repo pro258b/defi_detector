@@ -1,43 +1,40 @@
 基础使用：
-pip install -r requirements.txt
 
-设置好.env
-
+- pip install -r requirements.txt
 (windows需要加装 pip install windows-curses)
-python setup.py (会生成 Path.home() / '.aether/config.yaml')
+
+- 设置好.env
+
+- python setup.py (会生成 Path.home() / '.aether/config.yaml')
+
+启动：
+
 python aether.py
 
 选s 设置 模型 api
 
+## 主要改动
 已经修改setup.py可以指向env其他模型
 
 主要修改 core\deep_analysis_engine.py 和 enhanced_llm_analyzer 里面提示词
 
 如果windows导致TUI curse不返回，用直接用法 
-  # Single file with all scans
+
   python direct_cli.py audit contract.sol
 
-  # Directory with all scans
   python direct_cli.py audit-dir ./contracts
 
-  # Skip static analysis
-  python direct_cli.py audit contract.sol --no-static
-
-  # Only LLM analysis
+  **Only LLM analysis**
   python direct_cli.py audit-dir ./contracts --no-static --no-validation
 
 结果显示
- # View all results
-  python view_db.py
-
-  # View last 10 results
+  **View last 10 results**
   python view_db.py --limit 10
 
-  # View only CRITICAL findings
   python view_db.py --severity CRITICAL
 
-  # Combine filters
-  python view_db.py --severity HIGH --limit 5
+## 下一步
+可以再把 defi-security-analyst.skill.md 结合到 enhanced_llm_analyzer.py
 
 也许要让提示词防止被风险拒绝"Refuse to run"
   For your case (DeFi security analysis):
