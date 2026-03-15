@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Per-pass and pipeline timeout constants (seconds)
 # ---------------------------------------------------------------------------
-_PASS_TIMEOUT_CHEAP = 180    # 3 minutes for Gemini Flash / GPT-mini
-_PASS_TIMEOUT_STRONG = 300   # 5 minutes for Claude / GPT-4
+_PASS_TIMEOUT_CHEAP = 180  # 3 minutes for Gemini Flash / GPT-mini
+_PASS_TIMEOUT_STRONG = 300  # 5 minutes for Claude / GPT-4
 _PIPELINE_MAX_DURATION = 1500  # 25 minutes max for entire pipeline
 
 
@@ -49,37 +49,41 @@ _PIPELINE_MAX_DURATION = 1500  # 25 minutes max for entire pipeline
 # Model tier selection helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_cheap_model() -> str:
     """Return a cheap/fast model for understanding passes."""
     try:
         from core.config_manager import get_model_for_task
-        model = get_model_for_task('validation')  # validation tier is cheaper
+
+        model = get_model_for_task("validation")  # validation tier is cheaper
         return model
     except Exception:
         pass
     # Fallback order: Gemini Flash (cheap + large context) > GPT-4o-mini > GPT-5-mini
-    if os.getenv('GEMINI_API_KEY'):
-        return 'gemini-2.5-flash'
-    return 'gpt-4.1-mini-2025-04-14'
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini-2.5-flash"
+    return "gpt-4.1-mini-2025-04-14"
 
 
 def _get_strong_model() -> str:
     """Return a strong/deep-reasoning model for analysis passes."""
     try:
         from core.config_manager import get_model_for_task
-        return get_model_for_task('analysis')
+
+        return get_model_for_task("analysis")
     except Exception:
         pass
-    if os.getenv('ANTHROPIC_API_KEY'):
-        return 'claude-sonnet-4-5-20250929'
-    return 'gpt-4.1-2025-04-14'
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "claude-sonnet-4-5-20250929"
+    return "gpt-4.1-2025-04-14"
 
 
 def _get_medium_model() -> str:
     """Return a medium-tier model for edge case analysis."""
     try:
         from core.config_manager import get_model_for_task
-        return get_model_for_task('medium')
+
+        return get_model_for_task("medium")
     except Exception:
         pass
     # Fallback to cheap model
@@ -97,37 +101,37 @@ def _get_model_for_pass(pass_number: int) -> str:
 
     Falls back gracefully when preferred provider API key is not available.
     """
-    has_gemini = bool(os.getenv('GEMINI_API_KEY'))
-    has_anthropic = bool(os.getenv('ANTHROPIC_API_KEY'))
-    has_openai = bool(os.getenv('OPENAI_API_KEY'))
+    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
 
     if pass_number <= 2:
         # Cheap/fast model for understanding passes
         if has_gemini:
-            return 'gemini-2.5-flash'
+            return "gemini-2.5-flash"
         return _get_cheap_model()
 
     if pass_number == 3:
         # Invariant analysis -- prefer Anthropic for reasoning depth
         if has_anthropic:
-            return 'claude-sonnet-4-5-20250929'
+            return "claude-sonnet-4-5-20250929"
         if has_openai:
-            return 'gpt-4.1-2025-04-14'
+            return "gpt-4.1-2025-04-14"
         return _get_strong_model()
 
     if pass_number == 4:
         # Cross-function -- rotate to different provider than Pass 3
         if has_openai:
-            return 'gpt-4.1-2025-04-14'
+            return "gpt-4.1-2025-04-14"
         if has_anthropic:
-            return 'claude-sonnet-4-5-20250929'
+            return "claude-sonnet-4-5-20250929"
         return _get_strong_model()
 
     # Pass 5: Adversarial modeling -- strongest available
     if has_anthropic:
-        return 'claude-sonnet-4-5-20250929'
+        return "claude-sonnet-4-5-20250929"
     if has_openai:
-        return 'gpt-4.1-2025-04-14'
+        return "gpt-4.1-2025-04-14"
     return _get_strong_model()
 
 
@@ -135,9 +139,11 @@ def _get_model_for_pass(pass_number: int) -> str:
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PassResult:
     """Result from a single analysis pass."""
+
     pass_name: str
     content: str  # Raw LLM response
     findings: List[Dict[str, Any]] = field(default_factory=list)
@@ -148,6 +154,7 @@ class PassResult:
 @dataclass
 class DeepAnalysisResult:
     """Complete result from all deep analysis passes."""
+
     archetype: ArchetypeResult
     pass_results: List[PassResult] = field(default_factory=list)
     all_findings: List[Dict[str, Any]] = field(default_factory=list)
@@ -160,21 +167,21 @@ class DeepAnalysisResult:
         unique_findings = []
         for f in self.all_findings:
             key = (
-                f.get('type', f.get('vulnerability_type', '')).lower(),
-                f.get('line', f.get('line_number', 0)),
+                f.get("type", f.get("vulnerability_type", "")).lower(),
+                f.get("line", f.get("line_number", 0)),
             )
             if key not in seen:
                 seen.add(key)
                 unique_findings.append(f)
 
         return {
-            'analysis': {
-                'vulnerabilities': unique_findings,
-                'archetype': self.archetype.primary.value,
-                'archetype_confidence': self.archetype.confidence,
-                'passes_completed': len(self.pass_results),
+            "analysis": {
+                "vulnerabilities": unique_findings,
+                "archetype": self.archetype.primary.value,
+                "archetype_confidence": self.archetype.confidence,
+                "passes_completed": len(self.pass_results),
             },
-            'deep_analysis': True,
+            "deep_analysis": True,
         }
 
 
@@ -182,12 +189,19 @@ class DeepAnalysisResult:
 # Prompt builders
 # ---------------------------------------------------------------------------
 
-def _build_pass1_prompt(contract_content: str, archetype: ArchetypeResult,
-                        file_context: str = "", related_context: str = "") -> str:
+
+def _build_pass1_prompt(
+    contract_content: str,
+    archetype: ArchetypeResult,
+    file_context: str = "",
+    related_context: str = "",
+) -> str:
     """Pass 1: Protocol Understanding."""
     archetype_hint = f"Detected archetype: {archetype.primary.value} (confidence: {archetype.confidence:.0%})"
     if archetype.secondary:
-        archetype_hint += f"\nSecondary: {', '.join(a.value for a in archetype.secondary)}"
+        archetype_hint += (
+            f"\nSecondary: {', '.join(a.value for a in archetype.secondary)}"
+        )
 
     file_context_section = ""
     if file_context:
@@ -197,7 +211,7 @@ def _build_pass1_prompt(contract_content: str, archetype: ArchetypeResult,
     if related_context:
         related_section = f"\n{related_context}\n"
 
-    return f"""You are a senior smart contract security auditor. Your task is to **understand** this protocol before looking for bugs.
+    return f"""You are a senior smart contract security auditor. Your goal is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. Your task is to **understand** this protocol before looking for bugs.
 
 {archetype_hint}
 {file_context_section}{related_section}
@@ -233,14 +247,15 @@ Return ONLY a JSON object with these fields:
 """
 
 
-def _build_pass2_prompt(contract_content: str, pass1_result: str,
-                        related_context: str = "") -> str:
+def _build_pass2_prompt(
+    contract_content: str, pass1_result: str, related_context: str = ""
+) -> str:
     """Pass 2: Attack Surface Mapping."""
     related_section = ""
     if related_context:
         related_section = f"\n{related_context}\n"
 
-    return f"""You are a senior smart contract security auditor mapping the attack surface of a protocol.
+    return f""" Your Goal is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. Now mapping the attack surface of a protocol.
 
 ## Protocol Understanding (from prior analysis)
 {pass1_result}
@@ -279,9 +294,14 @@ For EVERY external and public function, analyze and return a JSON object:
 """
 
 
-def _build_pass3_prompt(contract_content: str, pass1_result: str, pass2_result: str,
-                        checklist_text: str, file_context: str = "",
-                        related_context: str = "") -> str:
+def _build_pass3_prompt(
+    contract_content: str,
+    pass1_result: str,
+    pass2_result: str,
+    checklist_text: str,
+    file_context: str = "",
+    related_context: str = "",
+) -> str:
     """Pass 3: Invariant Violation Analysis."""
     file_context_section = ""
     if file_context:
@@ -291,7 +311,7 @@ def _build_pass3_prompt(contract_content: str, pass1_result: str, pass2_result: 
     if related_context:
         related_section = f"\n{related_context}\n"
 
-    return f"""You are an elite smart contract security auditor. Your mission: systematically check every protocol invariant against every code path.
+    return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. You will check every protocol invariant against every code path.
 {file_context_section}
 ## Protocol Understanding
 {pass1_result}
@@ -314,7 +334,7 @@ For EACH invariant identified in the protocol understanding, and EACH checklist 
 3. If yes: what exact sequence of calls causes the violation?
 4. What existing protections prevent this? Can those protections be bypassed?
 
-BE AGGRESSIVE — report potential violations even if you're only 60% sure. False negatives are worse than false positives here.
+Report potential violations even if you're only 60% sure. False negatives are worse than false positives here.
 
 ## Examples of REAL Vulnerabilities (report these)
 
@@ -404,9 +424,14 @@ Return ONLY findings that represent real vulnerabilities. Do NOT report informat
 """
 
 
-def _build_pass3_5_prompt(contract_content: str, pass1_result: str, pass2_result: str,
-                          pass3_findings: str, cross_contract_context: str,
-                          related_context: str = "") -> str:
+def _build_pass3_5_prompt(
+    contract_content: str,
+    pass1_result: str,
+    pass2_result: str,
+    pass3_findings: str,
+    cross_contract_context: str,
+    related_context: str = "",
+) -> str:
     """Pass 3.5: Cross-Contract Vulnerability Analysis.
 
     Targets vulnerabilities that span multiple contracts: trust boundary
@@ -425,7 +450,7 @@ def _build_pass3_5_prompt(contract_content: str, pass1_result: str, pass2_result
     if related_context:
         related_section = f"\n{related_context}\n"
 
-    return f"""You are an elite smart contract security auditor specializing in **cross-contract vulnerabilities** — bugs that only manifest when analyzing how multiple contracts interact.
+    return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. specializing in **cross-contract vulnerabilities** — bugs that only manifest when analyzing how multiple contracts interact.
 
 ## Protocol Understanding
 {pass1_result}
@@ -578,8 +603,13 @@ Return ONLY findings that represent real cross-contract vulnerabilities. Do NOT 
 """
 
 
-def _build_pass4_prompt(contract_content: str, pass1_result: str, pass2_result: str,
-                        pass3_findings: str = "", cross_contract_context: str = "") -> str:
+def _build_pass4_prompt(
+    contract_content: str,
+    pass1_result: str,
+    pass2_result: str,
+    pass3_findings: str = "",
+    cross_contract_context: str = "",
+) -> str:
     """Pass 4: Cross-Function Interaction Analysis."""
     previous_findings_section = ""
     if pass3_findings:
@@ -599,7 +629,7 @@ NOTE: Use this cross-contract context to identify cross-function interactions th
 
 """
 
-    return f"""You are an elite smart contract security auditor analyzing cross-function interactions.
+    return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. analyzing cross-function interactions.
 
 ## Protocol Understanding
 {pass1_result}
@@ -703,16 +733,21 @@ Only include a finding in your JSON output if you can answer ALL five questions 
 """
 
 
-def _build_pass5_prompt(contract_content: str, pass1_result: str, pass2_result: str,
-                        pass3_findings: str, pass4_findings: str,
-                        exploit_patterns: str) -> str:
+def _build_pass5_prompt(
+    contract_content: str,
+    pass1_result: str,
+    pass2_result: str,
+    pass3_findings: str,
+    pass4_findings: str,
+    exploit_patterns: str,
+) -> str:
     """Pass 5: Adversarial Modeling."""
-    return f"""You are a **black-hat attacker** with unlimited resources. Your goal is to extract maximum value from this protocol.
+    return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. You think with unlimited resources and identify any bad actors who might extract maximum value from this protocol.
 
 You have:
 - Unlimited flash loan capital (any amount, any token)
 - MEV capabilities (front-run, back-run, sandwich any transaction)
-- Multiple Ethereum accounts
+
 - Governance tokens available for purchase
 - Deep knowledge of EVM internals, assembly, and cross-protocol interactions
 
@@ -822,6 +857,7 @@ Only include a finding in your JSON output if you can answer ALL five questions 
 # Content hashing for caching
 # ---------------------------------------------------------------------------
 
+
 def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
@@ -832,9 +868,9 @@ def _build_file_context_header(contract_files: List[Dict[str, Any]]) -> str:
         return ""
     lines = ["## Project Files"]
     for cf in contract_files:
-        name = os.path.basename(cf.get('path', 'unknown'))
-        label = "[DEPLOYMENT SCRIPT]" if cf.get('is_script', False) else "[PRODUCTION]"
-        if cf.get('is_context_only', False):
+        name = os.path.basename(cf.get("path", "unknown"))
+        label = "[DEPLOYMENT SCRIPT]" if cf.get("is_script", False) else "[PRODUCTION]"
+        if cf.get("is_context_only", False):
             label = "[CONTEXT]"
         lines.append(f"- {name} {label}")
     return "\n".join(lines)
@@ -864,15 +900,8 @@ def _build_related_context_section(
 
     if not full_source:
         # One-liner reference list (for Pass 5)
-        refs = [
-            f"- {src.name} ({src.relationship})"
-            for src in related_sources[:20]
-        ]
-        return (
-            "\n## Related Contracts (Reference)\n"
-            + "\n".join(refs)
-            + "\n"
-        )
+        refs = [f"- {src.name} ({src.relationship})" for src in related_sources[:20]]
+        return "\n## Related Contracts (Reference)\n" + "\n".join(refs) + "\n"
 
     selected = RelatedContractResolver.select_within_budget(
         related_sources, budget_chars
@@ -888,11 +917,11 @@ def _build_related_context_section(
     ]
 
     relationship_labels = {
-        'parent': 'Parent',
-        'interface': 'Interface',
-        'library': 'Library',
-        'dependency': 'Dependency',
-        'sibling': 'Sibling',
+        "parent": "Parent",
+        "interface": "Interface",
+        "library": "Library",
+        "dependency": "Dependency",
+        "sibling": "Sibling",
     }
 
     for src in selected:
@@ -911,10 +940,15 @@ def _build_related_context_section(
 # Engine
 # ---------------------------------------------------------------------------
 
+
 class DeepAnalysisEngine:
     """Multi-pass LLM analysis engine that thinks like an elite auditor."""
 
-    def __init__(self, llm_analyzer, archetype_detector: Optional[ProtocolArchetypeDetector] = None):
+    def __init__(
+        self,
+        llm_analyzer,
+        archetype_detector: Optional[ProtocolArchetypeDetector] = None,
+    ):
         """
         Args:
             llm_analyzer: Instance of EnhancedLLMAnalyzer (provides _call_llm method)
@@ -933,6 +967,7 @@ class DeepAnalysisEngine:
         """Load per-severity acceptance rates for calibrating LLM findings."""
         try:
             from core.accuracy_tracker import AccuracyTracker
+
             tracker = AccuracyTracker()
             self._severity_calibration = tracker.get_severity_calibration()
         except Exception:
@@ -973,16 +1008,20 @@ class DeepAnalysisEngine:
         """
         if not self._severity_calibration:
             return
-        severity = finding.get('severity', '').lower()
+        severity = finding.get("severity", "").lower()
         rate = self._severity_calibration.get(severity)
         if rate is None:
             return
         if rate < 0.4:
             # Penalize: scale confidence down proportionally
-            finding['confidence'] = max(0.1, finding.get('confidence', 0.5) * (0.6 + rate))
+            finding["confidence"] = max(
+                0.1, finding.get("confidence", 0.5) * (0.6 + rate)
+            )
         elif rate > 0.7:
             # Boost: small increase capped at 1.0
-            finding['confidence'] = min(1.0, finding.get('confidence', 0.5) * (1.0 + (rate - 0.7) * 0.5))
+            finding["confidence"] = min(
+                1.0, finding.get("confidence", 0.5) * (1.0 + (rate - 0.7) * 0.5)
+            )
 
     async def analyze(
         self,
@@ -1008,9 +1047,15 @@ class DeepAnalysisEngine:
 
         # Detect archetype
         archetype = self.archetype_detector.detect(combined_content)
-        print(f"🔍 Protocol archetype: {archetype.primary.value} (confidence: {archetype.confidence:.0%})", flush=True)
+        print(
+            f"🔍 Protocol archetype: {archetype.primary.value} (confidence: {archetype.confidence:.0%})",
+            flush=True,
+        )
         if archetype.secondary:
-            print(f"   Secondary: {', '.join(a.value for a in archetype.secondary)}", flush=True)
+            print(
+                f"   Secondary: {', '.join(a.value for a in archetype.secondary)}",
+                flush=True,
+            )
 
         result = DeepAnalysisResult(archetype=archetype)
         content_key = _content_hash(combined_content)
@@ -1023,6 +1068,7 @@ class DeepAnalysisEngine:
         if ast_data is not None:
             try:
                 from core.solidity_ast import SolidityASTParser
+
                 ast_parser = SolidityASTParser()
                 ast_context = ast_parser.format_for_llm(ast_data)
             except Exception as e:
@@ -1033,6 +1079,7 @@ class DeepAnalysisEngine:
         if taint_reports:
             try:
                 from core.taint_analyzer import TaintAnalyzer
+
                 ta = TaintAnalyzer()
                 taint_summaries = []
                 for report in taint_reports:
@@ -1046,11 +1093,12 @@ class DeepAnalysisEngine:
         if ast_data is not None:
             try:
                 from core.solidity_ast import SolidityASTParser
+
                 cfg_parser = SolidityASTParser()
                 cfg_summaries = []
-                for cdef in getattr(ast_data, 'contracts', []):
-                    for func in getattr(cdef, 'functions', []):
-                        body = getattr(func, 'body_source', '')
+                for cdef in getattr(ast_data, "contracts", []):
+                    for func in getattr(cdef, "functions", []):
+                        body = getattr(func, "body_source", "")
                         if body and len(body.strip()) > 10:
                             try:
                                 cfg = cfg_parser.build_cfg(body)
@@ -1070,36 +1118,53 @@ class DeepAnalysisEngine:
         related_sources = []
         try:
             from core.cross_contract_analyzer import RelatedContractResolver
+
             resolver = RelatedContractResolver()
             # Separate target files from context-only files
-            target_files = [cf for cf in contract_files if not cf.get('is_context_only', False)]
+            target_files = [
+                cf for cf in contract_files if not cf.get("is_context_only", False)
+            ]
             related_sources = resolver.resolve_related_sources(
-                target_files, contract_files,
+                target_files,
+                contract_files,
                 project_root=self._detect_project_root(contract_files),
             )
             if related_sources:
                 names = [f"{s.name} ({s.relationship})" for s in related_sources[:8]]
-                extra = f" (+{len(related_sources) - 8} more)" if len(related_sources) > 8 else ""
-                print(f"📎 Found {len(related_sources)} related contracts: {', '.join(names)}{extra}", flush=True)
+                extra = (
+                    f" (+{len(related_sources) - 8} more)"
+                    if len(related_sources) > 8
+                    else ""
+                )
+                print(
+                    f"📎 Found {len(related_sources)} related contracts: {', '.join(names)}{extra}",
+                    flush=True,
+                )
         except Exception as e:
             logger.debug(f"Related contract resolution failed: {e}")
 
         # Per-pass character budgets for related context
         related_budgets = {
-            1: 200_000,    # Gemini Flash (2M ctx)
-            2: 150_000,    # Gemini Flash (2M ctx)
-            3: 100_000,    # Claude Sonnet (200K ctx)
-            3.5: 80_000,   # Claude Sonnet (200K ctx) — highest value for cross-contract
-            4: 50_000,     # GPT-4.1 (1M ctx) — summary only
-            5: 0,          # One-liner reference only
+            1: 200_000,  # Gemini Flash (2M ctx)
+            2: 150_000,  # Gemini Flash (2M ctx)
+            3: 100_000,  # Claude Sonnet (200K ctx)
+            3.5: 80_000,  # Claude Sonnet (200K ctx) — highest value for cross-contract
+            4: 50_000,  # GPT-4.1 (1M ctx) — summary only
+            5: 0,  # One-liner reference only
         }
 
         # Truncate contract to fit within model context (keep first 300K chars)
         max_contract_chars = 300000
         truncated_content = combined_content
         if len(combined_content) > max_contract_chars:
-            truncated_content = combined_content[:max_contract_chars] + "\n\n// [truncated for analysis]"
-            print(f"   Truncated contract from {len(combined_content)} to {max_contract_chars} chars for LLM", flush=True)
+            truncated_content = (
+                combined_content[:max_contract_chars]
+                + "\n\n// [truncated for analysis]"
+            )
+            print(
+                f"   Truncated contract from {len(combined_content)} to {max_contract_chars} chars for LLM",
+                flush=True,
+            )
 
         # Prepend file context to content for LLM awareness
         if file_context:
@@ -1112,9 +1177,12 @@ class DeepAnalysisEngine:
         related_ctx_p1 = _build_related_context_section(
             related_sources, related_budgets.get(1, 0), full_source=True
         )
-        pass1_prompt = _build_pass1_prompt(truncated_content, archetype,
-                                           file_context=file_context,
-                                           related_context=related_ctx_p1)
+        pass1_prompt = _build_pass1_prompt(
+            truncated_content,
+            archetype,
+            file_context=file_context,
+            related_context=related_ctx_p1,
+        )
         if ast_context:
             pass1_prompt += f"\n\n{ast_context}"
         pass1_text = await self._run_pass(
@@ -1124,7 +1192,9 @@ class DeepAnalysisEngine:
             cache_key=f"p1_{content_key}" if not ast_context else None,
         )
         if pass1_text:
-            result.pass_results.append(PassResult("protocol_understanding", pass1_text, model_used=pass1_model))
+            result.pass_results.append(
+                PassResult("protocol_understanding", pass1_text, model_used=pass1_model)
+            )
         else:
             print("⚠️  Pass 1 failed, continuing with reduced context", flush=True)
             pass1_text = "{}"
@@ -1136,8 +1206,9 @@ class DeepAnalysisEngine:
         related_ctx_p2 = _build_related_context_section(
             related_sources, related_budgets.get(2, 0), full_source=True
         )
-        pass2_prompt = _build_pass2_prompt(truncated_content, pass1_text,
-                                           related_context=related_ctx_p2)
+        pass2_prompt = _build_pass2_prompt(
+            truncated_content, pass1_text, related_context=related_ctx_p2
+        )
         if taint_context:
             pass2_prompt += f"\n\n{taint_context}"
         if cfg_context:
@@ -1146,10 +1217,14 @@ class DeepAnalysisEngine:
             "Pass 2: Attack Surface Mapping",
             pass2_prompt,
             pass2_model,
-            cache_key=f"p2_{content_key}" if not (taint_context or cfg_context) else None,
+            cache_key=f"p2_{content_key}"
+            if not (taint_context or cfg_context)
+            else None,
         )
         if pass2_text:
-            result.pass_results.append(PassResult("attack_surface", pass2_text, model_used=pass2_model))
+            result.pass_results.append(
+                PassResult("attack_surface", pass2_text, model_used=pass2_model)
+            )
         else:
             print("⚠️  Pass 2 failed, continuing with reduced context", flush=True)
             pass2_text = "{}"
@@ -1161,7 +1236,9 @@ class DeepAnalysisEngine:
         exploit_patterns = self.exploit_kb.get_for_archetypes(
             [archetype.primary] + archetype.secondary
         )
-        exploit_text = self.exploit_kb.format_for_prompt(exploit_patterns, max_patterns=20)
+        exploit_text = self.exploit_kb.format_for_prompt(
+            exploit_patterns, max_patterns=20
+        )
 
         # --- Pass 3: Invariant Violation Analysis ---
         pass3_model = _get_model_for_pass(3)
@@ -1172,8 +1249,14 @@ class DeepAnalysisEngine:
         )
         pass3_findings = await self._run_finding_pass(
             "Pass 3: Invariant Violations",
-            _build_pass3_prompt(truncated_content, pass1_text, pass2_text, checklist_text,
-                                file_context=file_context, related_context=related_ctx_p3),
+            _build_pass3_prompt(
+                truncated_content,
+                pass1_text,
+                pass2_text,
+                checklist_text,
+                file_context=file_context,
+                related_context=related_ctx_p3,
+            ),
             pass3_model,
             result,
         )
@@ -1187,22 +1270,33 @@ class DeepAnalysisEngine:
         if len(contract_files) >= 2:
             try:
                 from core.cross_contract_analyzer import InterContractAnalyzer
+
                 cc_analyzer = InterContractAnalyzer()
                 cc_context = cc_analyzer.analyze_relationships(contract_files)
                 cc_context_text = cc_analyzer.format_for_llm(cc_context)
 
                 if cc_context.relationships:
-                    pass3_5_model = _get_model_for_pass(3)  # Same strong model as Pass 3
-                    logger.info(f"Pass 3.5: Using {pass3_5_model} (cross-contract analysis)")
-                    print(f"   \U0001f4e1 Pass 3.5: {pass3_5_model} (cross-contract)", flush=True)
+                    pass3_5_model = _get_model_for_pass(
+                        3
+                    )  # Same strong model as Pass 3
+                    logger.info(
+                        f"Pass 3.5: Using {pass3_5_model} (cross-contract analysis)"
+                    )
+                    print(
+                        f"   \U0001f4e1 Pass 3.5: {pass3_5_model} (cross-contract)",
+                        flush=True,
+                    )
                     related_ctx_p35 = _build_related_context_section(
                         related_sources, related_budgets.get(3.5, 0), full_source=True
                     )
                     pass3_5_findings = await self._run_finding_pass(
                         "Pass 3.5: Cross-Contract Vulnerabilities",
                         _build_pass3_5_prompt(
-                            truncated_content, pass1_text, pass2_text,
-                            p3_summary, cc_context_text,
+                            truncated_content,
+                            pass1_text,
+                            pass2_text,
+                            p3_summary,
+                            cc_context_text,
                             related_context=related_ctx_p35,
                         ),
                         pass3_5_model,
@@ -1215,7 +1309,10 @@ class DeepAnalysisEngine:
                         # Append cross-contract findings to p3_summary for downstream passes
                         p3_summary = p3_summary + "\n\n" + p3_5_summary
                 else:
-                    print("   ℹ️  Pass 3.5: No cross-contract relationships detected, skipping", flush=True)
+                    print(
+                        "   ℹ️  Pass 3.5: No cross-contract relationships detected, skipping",
+                        flush=True,
+                    )
             except Exception as e:
                 logger.warning(f"Pass 3.5 (cross-contract) failed: {e}")
                 print(f"   ⚠️  Pass 3.5 failed: {e}", flush=True)
@@ -1229,9 +1326,13 @@ class DeepAnalysisEngine:
         related_ctx_p4 = _build_related_context_section(
             related_sources, related_budgets.get(4, 0), full_source=True
         )
-        pass4_prompt = _build_pass4_prompt(truncated_content, pass1_text, pass2_text,
-                                           pass3_findings=p3_summary,
-                                           cross_contract_context=cc_context_text)
+        pass4_prompt = _build_pass4_prompt(
+            truncated_content,
+            pass1_text,
+            pass2_text,
+            pass3_findings=p3_summary,
+            cross_contract_context=cc_context_text,
+        )
         if related_ctx_p4:
             pass4_prompt += f"\n{related_ctx_p4}"
         pass4_findings = await self._run_finding_pass(
@@ -1248,8 +1349,12 @@ class DeepAnalysisEngine:
         logger.info(f"Pass 5: Using {pass5_model} (provider rotation)")
         print(f"   \U0001f4e1 Pass 5: {pass5_model}", flush=True)
         pass5_prompt = _build_pass5_prompt(
-            truncated_content, pass1_text, pass2_text,
-            p3_summary, p4_summary, exploit_text,
+            truncated_content,
+            pass1_text,
+            pass2_text,
+            p3_summary,
+            p4_summary,
+            exploit_text,
         )
         # Append one-liner related contract reference for Pass 5
         related_ref_p5 = _build_related_context_section(
@@ -1270,18 +1375,26 @@ class DeepAnalysisEngine:
 
         result.total_duration = time.time() - start_time
         total_findings = len(result.all_findings)
-        print(f"✅ Deep analysis complete: {total_findings} findings in {result.total_duration:.1f}s "
-              f"({len(result.pass_results)} passes)", flush=True)
+        print(
+            f"✅ Deep analysis complete: {total_findings} findings in {result.total_duration:.1f}s "
+            f"({len(result.pass_results)} passes)",
+            flush=True,
+        )
 
         return result
 
     @staticmethod
     def _detect_project_root(contract_files: List[Dict[str, Any]]) -> Optional[str]:
         """Detect project root by walking up from contract file paths."""
-        markers = ('foundry.toml', 'hardhat.config.js', 'hardhat.config.ts',
-                   'package.json', 'remappings.txt')
+        markers = (
+            "foundry.toml",
+            "hardhat.config.js",
+            "hardhat.config.ts",
+            "package.json",
+            "remappings.txt",
+        )
         for cf in contract_files:
-            path = cf.get('path', '')
+            path = cf.get("path", "")
             if not path:
                 continue
             current = os.path.dirname(os.path.abspath(path))
@@ -1295,14 +1408,18 @@ class DeepAnalysisEngine:
                 current = parent
         return None
 
-    async def _run_pass(self, name: str, prompt: str, model: str,
-                        cache_key: Optional[str] = None) -> Optional[str]:
+    async def _run_pass(
+        self, name: str, prompt: str, model: str, cache_key: Optional[str] = None
+    ) -> Optional[str]:
         """Run a single analysis pass and return the raw LLM response."""
         # Check pipeline time budget
-        if hasattr(self, '_pipeline_start'):
+        if hasattr(self, "_pipeline_start"):
             elapsed = time.time() - self._pipeline_start
             if elapsed > _PIPELINE_MAX_DURATION:
-                print(f"   ⏱️  Pipeline time budget exceeded ({elapsed:.0f}s), skipping {name}", flush=True)
+                print(
+                    f"   ⏱️  Pipeline time budget exceeded ({elapsed:.0f}s), skipping {name}",
+                    flush=True,
+                )
                 return None
 
         # Check cache
@@ -1311,7 +1428,7 @@ class DeepAnalysisEngine:
             return self._cache[cache_key]
 
         # Per-pass timeout: shorter for cheap models, longer for strong models
-        is_cheap = any(tag in (model or '') for tag in ('flash', 'mini'))
+        is_cheap = any(tag in (model or "") for tag in ("flash", "mini"))
         pass_timeout = _PASS_TIMEOUT_CHEAP if is_cheap else _PASS_TIMEOUT_STRONG
 
         print(f"   🔍 {name} ({model}, timeout {pass_timeout}s)...", flush=True)
@@ -1340,8 +1457,9 @@ class DeepAnalysisEngine:
             print(f"   ⚠️  {name} failed: {e}", flush=True)
             return None
 
-    async def _run_finding_pass(self, name: str, prompt: str, model: str,
-                                result: DeepAnalysisResult) -> List[Dict[str, Any]]:
+    async def _run_finding_pass(
+        self, name: str, prompt: str, model: str, result: DeepAnalysisResult
+    ) -> List[Dict[str, Any]]:
         """Run a finding-producing pass, parse findings, and add to result."""
         response = await self._run_pass(name, prompt, model)
         if not response:
@@ -1355,8 +1473,10 @@ class DeepAnalysisEngine:
             print(f"   📊 {name}: {len(findings)} findings", flush=True)
         else:
             # Log response snippet for debugging extraction failures
-            snippet = response[:200].replace('\n', ' ')
-            logger.info(f"{name}: 0 findings extracted from {len(response)} char response (starts: {snippet}...)")
+            snippet = response[:200].replace("\n", " ")
+            logger.info(
+                f"{name}: 0 findings extracted from {len(response)} char response (starts: {snippet}...)"
+            )
             print(f"   ⚠️  {name}: 0 findings extracted from LLM response", flush=True)
         return findings
 
@@ -1370,13 +1490,13 @@ class DeepAnalysisEngine:
         raw_findings = []
         if isinstance(parsed, dict) and parsed:
             # Check common keys where findings might live
-            for key in ('findings', 'vulnerabilities', 'results', 'issues'):
+            for key in ("findings", "vulnerabilities", "results", "issues"):
                 candidate = parsed.get(key, [])
                 if isinstance(candidate, list) and candidate:
                     raw_findings = candidate
                     break
             # If the dict itself looks like a single finding, wrap it
-            if not raw_findings and 'type' in parsed and 'severity' in parsed:
+            if not raw_findings and "type" in parsed and "severity" in parsed:
                 raw_findings = [parsed]
         elif isinstance(parsed, list) and parsed:
             raw_findings = parsed
@@ -1385,10 +1505,14 @@ class DeepAnalysisEngine:
             # Try to find embedded JSON arrays in the response text (LLM sometimes
             # wraps findings in markdown or explanatory prose)
             import re
-            array_match = re.search(r'\[\s*\{.*?\}\s*(?:,\s*\{.*?\}\s*)*\]', response, re.DOTALL)
+
+            array_match = re.search(
+                r"\[\s*\{.*?\}\s*(?:,\s*\{.*?\}\s*)*\]", response, re.DOTALL
+            )
             if array_match:
                 try:
                     from core.json_utils import safe_json_parse
+
                     candidate_list = safe_json_parse(array_match.group(0), [])
                     if isinstance(candidate_list, list) and candidate_list:
                         raw_findings = candidate_list
@@ -1396,29 +1520,41 @@ class DeepAnalysisEngine:
                     pass
 
         if not raw_findings:
-            logger.debug(f"{pass_name}: no structured findings extracted from {len(response)} char response")
+            logger.debug(
+                f"{pass_name}: no structured findings extracted from {len(response)} char response"
+            )
 
         for f in raw_findings:
             if isinstance(f, dict):
                 # Normalize finding structure
                 finding = {
-                    'type': f.get('type', f.get('vulnerability_type', 'unknown')),
-                    'vulnerability_type': f.get('type', f.get('vulnerability_type', 'unknown')),
-                    'severity': f.get('severity', 'medium'),
-                    'confidence': float(f.get('confidence', 0.5)),
-                    'title': f.get('title', f.get('description', '')[:80]),
-                    'description': f.get('description', ''),
-                    'line': f.get('line', f.get('line_number', 0)),
-                    'line_number': f.get('line', f.get('line_number', 0)),
-                    'source': f'deep_analysis_{pass_name}',
-                    'affected_functions': f.get('affected_functions', []),
+                    "type": f.get("type", f.get("vulnerability_type", "unknown")),
+                    "vulnerability_type": f.get(
+                        "type", f.get("vulnerability_type", "unknown")
+                    ),
+                    "severity": f.get("severity", "medium"),
+                    "confidence": float(f.get("confidence", 0.5)),
+                    "title": f.get("title", f.get("description", "")[:80]),
+                    "description": f.get("description", ""),
+                    "line": f.get("line", f.get("line_number", 0)),
+                    "line_number": f.get("line", f.get("line_number", 0)),
+                    "source": f"deep_analysis_{pass_name}",
+                    "affected_functions": f.get("affected_functions", []),
                 }
                 # Preserve extra fields
-                for key in ('attack_sequence', 'attack_steps', 'impact',
-                            'precedent', 'proof_sketch', 'trigger',
-                            'edge_case_category', 'attack_type',
-                            'invariant_violated', 'capital_required',
-                            'profit_estimate'):
+                for key in (
+                    "attack_sequence",
+                    "attack_steps",
+                    "impact",
+                    "precedent",
+                    "proof_sketch",
+                    "trigger",
+                    "edge_case_category",
+                    "attack_type",
+                    "invariant_violated",
+                    "capital_required",
+                    "profit_estimate",
+                ):
                     if key in f:
                         finding[key] = f[key]
                 # ML Feedback Loop: calibrate severity confidence from history
@@ -1427,17 +1563,19 @@ class DeepAnalysisEngine:
 
         return findings
 
-    def _summarize_findings(self, findings: List[Dict[str, Any]], section_name: str) -> str:
+    def _summarize_findings(
+        self, findings: List[Dict[str, Any]], section_name: str
+    ) -> str:
         """Create a text summary of findings for use in subsequent passes."""
         if not findings:
             return f"## {section_name}\nNo findings from this analysis pass."
 
         lines = [f"## {section_name} ({len(findings)} findings)", ""]
         for i, f in enumerate(findings, 1):
-            sev = f.get('severity', '?').upper()
-            title = f.get('title', f.get('description', 'Unknown')[:80])
+            sev = f.get("severity", "?").upper()
+            title = f.get("title", f.get("description", "Unknown")[:80])
             lines.append(f"{i}. [{sev}] {title}")
-            desc = f.get('description', '')
+            desc = f.get("description", "")
             if desc:
                 lines.append(f"   {desc[:200]}")
             lines.append("")

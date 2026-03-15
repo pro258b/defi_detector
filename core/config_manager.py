@@ -59,6 +59,7 @@ class AetherConfig:
     openai_api_key: str = ""
     gemini_api_key: str = ""
     anthropic_api_key: str = ""
+    anthropic_base_url: str = ""
 
     # Model Provider Selection (per task type)
     # Choose which provider to use for each task: "openai", "gemini", or "anthropic"
