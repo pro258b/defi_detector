@@ -494,6 +494,16 @@ class LLMFalsePositiveFilter:
         
         # Detect contract architecture patterns
         architecture_analysis = self._analyze_contract_architecture(context)
+        imports_text = "\n".join(context.get('imports', []) or ['N/A'])
+        inheritance_text = "\n".join(context.get('inheritance', []) or ['N/A'])
+        related_sources = context.get('related_sources', {}) or {}
+        if related_sources:
+            related_sources_text = "\n".join(
+                f"--- {path} ---\n```solidity\n{source}\n```"
+                for path, source in related_sources.items()
+            )
+        else:
+            related_sources_text = "N/A"
         
         return f"""
 You are an expert smart contract security auditor validating a potential vulnerability.
@@ -577,13 +587,13 @@ If off-chain validation prevents exploitation:
 ```
 
 **IMPORTS:**
-{chr(10).join(context.get('imports', []) or ['N/A'])}
+{imports_text}
 
 **INHERITANCE:**
-{chr(10).join(context.get('inheritance', []) or ['N/A'])}
+{inheritance_text}
 
 **RELATED SOURCES:**
-{chr(10).join([f"--- {p} ---\n```solidity\n{src}\n```" for p, src in (context.get('related_sources', {}) or {}).items()]) or 'N/A'}
+{related_sources_text}
 
 **FULL CONTRACT CODE:**
 ```solidity

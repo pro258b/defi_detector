@@ -23,6 +23,11 @@ from core.llm_false_positive_filter import LLMFalsePositiveFilter
 from core.foundry_poc_generator import FoundryPoCGenerator
 from core.database_manager import DatabaseManager, AuditResult, VulnerabilityFinding, LearningPattern, AuditMetrics
 from core.enhanced_report_generator import EnhancedReportGenerator
+from core.aderyn_adapter import AderynAdapter
+from core.aderyn_detector_selector import (
+    classify_project_for_aderyn,
+    filter_aderyn_findings_for_project,
+)
 
 
 class EnhancedAetherAuditEngine:
@@ -211,6 +216,7 @@ class EnhancedAetherAuditEngine:
         
         all_vulnerabilities = []
         total_lines = 0
+        aderyn_results: Dict[str, Any] = {'vulnerabilities': [], 'errors': []}
         
         # STAGE 1: Run enhanced pattern-based detectors
         print("   🔎 Running enhanced pattern-based detectors...", flush=True)
@@ -306,6 +312,38 @@ class EnhancedAetherAuditEngine:
                     })
             except Exception as e:
                 logger.warning(f"DeFi detector failed for {contract_file['name']}: {e}")
+
+        aderyn_target = self._select_aderyn_target(contract_files)
+        if aderyn_target:
+            print("   ðŸ¦… Running external Aderyn analysis...", flush=True)
+            try:
+                aderyn_classification = classify_project_for_aderyn(aderyn_target)
+                aderyn_adapter = AderynAdapter()
+                aderyn_run = aderyn_adapter.run(aderyn_target)
+                if aderyn_run.success:
+                    filtered_findings = filter_aderyn_findings_for_project(
+                        aderyn_run.normalized_findings,
+                        aderyn_classification,
+                    )
+                    aderyn_results['vulnerabilities'] = filtered_findings
+                    aderyn_results['classification'] = {
+                        'target_path': aderyn_classification.target_path,
+                        'solidity_files_scanned': aderyn_classification.solidity_files_scanned,
+                        'enabled_detectors': sorted(aderyn_classification.enabled_detectors),
+                        'reasons': aderyn_classification.reasons,
+                    }
+                    all_vulnerabilities.extend(filtered_findings)
+                    print(
+                        f"   âœ… Aderyn analysis found {len(aderyn_run.normalized_findings)} vulnerabilities",
+                        flush=True,
+                    )
+                elif aderyn_run.error_message:
+                    aderyn_results['errors'].append(aderyn_run.error_message)
+                    print(f"   â„¹ï¸  Aderyn analysis skipped: {aderyn_run.error_message}", flush=True)
+            except Exception as e:
+                logger.warning(f"Aderyn analysis failed: {e}")
+                aderyn_results['errors'].append(str(e))
+                print(f"   â„¹ï¸  Aderyn analysis skipped: {e}", flush=True)
         
         # NEW: Deduplicate vulnerabilities before filtering
         print("   🔄 Deduplicating vulnerabilities...", flush=True)
@@ -463,10 +501,31 @@ class EnhancedAetherAuditEngine:
         
         return {
             'vulnerabilities': validated_vulnerabilities,
+            'aderyn_analysis': aderyn_results,
             'total_lines': total_lines,
             'contract_count': len(contract_files),
             'statistics': self.stats.copy()
         }
+
+    def _select_aderyn_target(self, contract_files: List[Dict[str, Any]]) -> Optional[str]:
+        """Choose the best filesystem target to hand to Aderyn."""
+        production_paths = [
+            Path(cf['path']).resolve()
+            for cf in contract_files
+            if cf.get('path') and not cf.get('is_context_only', False)
+        ]
+        if not production_paths:
+            return None
+
+        parent_dirs = {path.parent for path in production_paths}
+        if len(parent_dirs) == 1:
+            return str(next(iter(parent_dirs)))
+
+        common_path = os.path.commonpath([str(path) for path in production_paths])
+        if common_path and os.path.isdir(common_path):
+            return common_path
+
+        return str(production_paths[0].parent)
 
     def _extract_code_snippet(self, contract_content: str, line_number: int, context_lines: int = 5) -> str:
         """Extract code snippet around a specific line number for LLM verification."""

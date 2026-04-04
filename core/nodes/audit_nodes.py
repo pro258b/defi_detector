@@ -4,10 +4,16 @@ AetherAudit node implementations.
 
 import asyncio
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from core.aderyn_adapter import AderynAdapter
+from core.aderyn_detector_selector import (
+    classify_project_for_aderyn,
+    filter_aderyn_findings_for_project,
+)
 from core.flow_executor import BaseNode, NodeResult
 from core.defi_vulnerability_detector import DeFiVulnerabilityDetector
 
@@ -108,6 +114,39 @@ class StaticAnalysisNode(BaseNode):
                 'errors': []
             }
 
+            aderyn_results = {
+                'vulnerabilities': [],
+                'errors': []
+            }
+            aderyn_target = self._select_aderyn_target(contract_files)
+            if aderyn_target:
+                print("ðŸ¦… Running external Aderyn analysis...")
+                try:
+                    aderyn_classification = classify_project_for_aderyn(aderyn_target)
+                    aderyn_adapter = AderynAdapter()
+                    aderyn_run = aderyn_adapter.run(aderyn_target)
+                    if aderyn_run.success:
+                        filtered_findings = filter_aderyn_findings_for_project(
+                            aderyn_run.normalized_findings,
+                            aderyn_classification,
+                        )
+                        aderyn_results['vulnerabilities'] = filtered_findings
+                        aderyn_results['classification'] = {
+                            'target_path': aderyn_classification.target_path,
+                            'solidity_files_scanned': aderyn_classification.solidity_files_scanned,
+                            'enabled_detectors': sorted(aderyn_classification.enabled_detectors),
+                            'reasons': aderyn_classification.reasons,
+                        }
+                        print(f"ðŸ“Š Aderyn analysis found {len(aderyn_run.normalized_findings)} vulnerabilities")
+                    elif aderyn_run.error_message:
+                        aderyn_results['errors'].append(aderyn_run.error_message)
+                        print(f"â„¹ï¸  Aderyn analysis skipped: {aderyn_run.error_message}")
+                except Exception as e:
+                    aderyn_results['errors'].append(str(e))
+                    print(f"â„¹ï¸  Aderyn analysis skipped: {e}")
+
+            tool_results['aderyn_analysis'] = aderyn_results
+
             print(f"📊 DeFi analysis found {len(defi_results)} vulnerabilities")
             for vuln in defi_results:
                 print(f"  - {vuln['title']}: {vuln['description']} (Bounty: {vuln['immunefi_bounty_potential']})")
@@ -115,8 +154,8 @@ class StaticAnalysisNode(BaseNode):
             # Apply context-aware false positive filtering (already done in improved detector)
             print(f"✅ After context validation: {len(pattern_results)} vulnerabilities (filtered out 0)")
             
-            # Combine pattern and DeFi results
-            all_vulnerabilities = pattern_results + defi_results
+            # Combine pattern, DeFi, and Aderyn results
+            all_vulnerabilities = pattern_results + defi_results + aderyn_results['vulnerabilities']
 
             # Pattern-based detectors are the primary static analysis
 
@@ -161,6 +200,33 @@ class StaticAnalysisNode(BaseNode):
                 data=None,
                 error=str(e)
             )
+
+    def _select_aderyn_target(self, contract_files: List[Any]) -> Optional[str]:
+        """Choose the best filesystem target to hand to Aderyn."""
+        paths: List[Path] = []
+        for item in contract_files:
+            if isinstance(item, (list, tuple)) and item:
+                candidate = item[0]
+            elif isinstance(item, dict):
+                candidate = item.get('path')
+            else:
+                candidate = None
+
+            if candidate:
+                paths.append(Path(candidate).resolve())
+
+        if not paths:
+            return None
+
+        parent_dirs = {path.parent for path in paths}
+        if len(parent_dirs) == 1:
+            return str(next(iter(parent_dirs)))
+
+        common_path = os.path.commonpath([str(path) for path in paths])
+        if common_path and os.path.isdir(common_path):
+            return common_path
+
+        return str(paths[0].parent)
 
     async def _run_mythril_placeholder(self, contract_path: str) -> Dict[str, Any]:
         """Placeholder - Mythril removed due to Python 3.12 compatibility."""

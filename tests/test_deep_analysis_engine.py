@@ -265,6 +265,12 @@ class TestPromptBuilders(unittest.TestCase):
         self.assertIn("vault_erc4626", prompt)
         self.assertIn("JSON", prompt)
 
+    def test_pass1_prompt_includes_skill_context(self):
+        archetype = ArchetypeResult(primary=ProtocolArchetype.VAULT_ERC4626, confidence=0.8)
+        prompt = _build_pass1_prompt("contract Test {}", archetype, skill_context="## Audit Skill Lens\n- focus")
+        self.assertIn("Audit Skill Lens", prompt)
+        self.assertIn("focus", prompt)
+
     def test_pass2_prompt_includes_pass1(self):
         prompt = _build_pass2_prompt("contract Test {}", "Pass 1 result here")
         self.assertIn("Pass 1 result here", prompt)
@@ -275,10 +281,34 @@ class TestPromptBuilders(unittest.TestCase):
         self.assertIn("Checklist", prompt)
         self.assertIn("invariant", prompt.lower())
 
+    def test_pass3_prompt_includes_skill_context(self):
+        prompt = _build_pass3_prompt(
+            "contract Test {}",
+            "{}",
+            "{}",
+            "## Checklist\n- Item 1",
+            skill_context="## Skill-Guided Exploit and Invariant Checks\n- verify reentrancy",
+        )
+        self.assertIn("Skill-Guided Exploit", prompt)
+        self.assertIn("verify reentrancy", prompt)
+
     def test_pass5_prompt_is_adversarial(self):
         prompt = _build_pass5_prompt("contract Test {}", "{}", "{}", "", "", "")
         self.assertIn("attacker", prompt.lower())
         self.assertIn("flash loan", prompt.lower())
+
+    def test_pass5_prompt_includes_skill_context(self):
+        prompt = _build_pass5_prompt(
+            "contract Test {}",
+            "{}",
+            "{}",
+            "",
+            "",
+            "",
+            skill_context="## Skill-Guided Adversarial Checks\n- test same-block operations",
+        )
+        self.assertIn("Skill-Guided Adversarial Checks", prompt)
+        self.assertIn("same-block operations", prompt)
 
     def test_pass5_prompt_includes_edge_cases(self):
         prompt = _build_pass5_prompt("contract Test {}", "{}", "{}", "", "", "")

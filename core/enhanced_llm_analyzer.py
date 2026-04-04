@@ -17,6 +17,7 @@ import requests
 from typing import Dict, List, Any, Optional
 
 from openai import OpenAI
+from core.skill_prompt_context import build_skill_prompt_sections
 
 
 class EnhancedLLMAnalyzer:
@@ -254,10 +255,21 @@ class EnhancedLLMAnalyzer:
                 f"✅ Contract size ({len(contract_content)} chars) fits within {self.model} context window"
             )
 
+        skill_sections = build_skill_prompt_sections(contract_content, static_results)
+        skill_context = skill_sections.get("one_shot", "")
+
         prompt = f"""
 You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly.
 
 {version_guidance}
+"""
+
+        if skill_context:
+            prompt += f"""
+{skill_context}
+"""
+
+        prompt += """
 
 **CRITICAL REQUIREMENTS:**
 1. **NO HALLUCINATIONS**: Only report vulnerabilities that actually exist in the code

@@ -1,0 +1,35 @@
+when an vulnerability is found, how do I uset tools (in this repo, or elsewhere you know) to detect live on Etherscan
+  or onchain new blocks, which contracts have the same problem, so I can notify as a Whitehat
+
+有时间快速切入一下： https://etherscan.io/tx/0xa5449881d1b7b90efcff341acb6dc5346fd03ac357112d7ddd8d1ec617eb3cd6
+
+https://docs.reservoir.xyz/products/savings-srusd-and-wsrusd?utm_source=chatgpt.com
+
+
+
+ Auditing ~\.aether\contracts\PlasmaVault_0xe9385e\contracts\vaults\PlasmaVault.sol... (timeout: 1200s)
+Forge not found in augmented PATH
+🚀 Starting enhanced AetherAudit...
+   📂 Discovered 1 sibling contract(s) for context
+🔍 Running enhanced static analysis...
+
+
+ Deduplicating vulnerabilities...
+   📉 Reduced from 250 to 120 vulnerabilities after deduplication
+   🔐 Analyzing access control context...
+🔍 Running taint analysis...
+   ⚠️  Found 122 unsanitized taint flows
+   ✅ Taint analysis: 122 dangerous, 8 sanitized flows
+🤖 Running enhanced LLM analysis...
+🧠 Using deep analysis engine (multi-pass)...
+🔍 Protocol archetype: vault_erc4626 (confidence: 92%)
+
+Warning: Ctrl+C - saving partial results...
+
+[!] Interrupted
+--------------------------------------------------------------------------------
+[*] Auditing C:\Users\hunte\.aether\contracts\PlasmaVault_0xe9385e\contracts\managers\access\AccessManagedUpgradeable.sol... (timeout: 1200s)
+Forge not found in augmented PATH
+🚀 Starting enhanced AetherAudit...
+   📂 Discovered 5 sibling contract(s) for context
+🔍 Running enhanced static analysis...

@@ -34,6 +34,7 @@ from core.protocol_archetypes import (
     get_checklists_for_result,
 )
 from core.exploit_knowledge_base import ExploitKnowledgeBase
+from core.skill_prompt_context import build_skill_prompt_sections
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +214,7 @@ def _build_pass1_prompt(
     archetype: ArchetypeResult,
     file_context: str = "",
     related_context: str = "",
+    skill_context: str = "",
 ) -> str:
     """Pass 1: Protocol Understanding."""
     archetype_hint = f"Detected archetype: {archetype.primary.value} (confidence: {archetype.confidence:.0%})"
@@ -229,10 +231,14 @@ def _build_pass1_prompt(
     if related_context:
         related_section = f"\n{related_context}\n"
 
+    skill_section = ""
+    if skill_context:
+        skill_section = f"\n{skill_context}\n"
+
     return f"""You are a senior smart contract security auditor. Your goal is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. Your task is to **understand** this protocol before looking for bugs.
 
 {archetype_hint}
-{file_context_section}{related_section}
+{file_context_section}{related_section}{skill_section}
 Analyze the following Solidity contract(s) and produce a structured understanding.
 
 ## Contract Code
@@ -266,18 +272,22 @@ Return ONLY a JSON object with these fields:
 
 
 def _build_pass2_prompt(
-    contract_content: str, pass1_result: str, related_context: str = ""
+    contract_content: str, pass1_result: str, related_context: str = "", skill_context: str = ""
 ) -> str:
     """Pass 2: Attack Surface Mapping."""
     related_section = ""
     if related_context:
         related_section = f"\n{related_context}\n"
 
+    skill_section = ""
+    if skill_context:
+        skill_section = f"\n{skill_context}\n"
+
     return f""" Your Goal is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. Now mapping the attack surface of a protocol.
 
 ## Protocol Understanding (from prior analysis)
 {pass1_result}
-{related_section}
+{related_section}{skill_section}
 ## Contract Code
 ```solidity
 {contract_content}
@@ -319,6 +329,7 @@ def _build_pass3_prompt(
     checklist_text: str,
     file_context: str = "",
     related_context: str = "",
+    skill_context: str = "",
 ) -> str:
     """Pass 3: Invariant Violation Analysis."""
     file_context_section = ""
@@ -329,6 +340,10 @@ def _build_pass3_prompt(
     if related_context:
         related_section = f"\n{related_context}\n"
 
+    skill_section = ""
+    if skill_context:
+        skill_section = f"\n{skill_context}\n"
+
     return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. You will check every protocol invariant against every code path.
 {file_context_section}
 ## Protocol Understanding
@@ -336,7 +351,7 @@ def _build_pass3_prompt(
 
 ## Attack Surface
 {pass2_result}
-{related_section}
+{related_section}{skill_section}
 {checklist_text}
 
 ## Contract Code
@@ -449,6 +464,7 @@ def _build_pass3_5_prompt(
     pass3_findings: str,
     cross_contract_context: str,
     related_context: str = "",
+    skill_context: str = "",
 ) -> str:
     """Pass 3.5: Cross-Contract Vulnerability Analysis.
 
@@ -468,6 +484,10 @@ def _build_pass3_5_prompt(
     if related_context:
         related_section = f"\n{related_context}\n"
 
+    skill_section = ""
+    if skill_context:
+        skill_section = f"\n{skill_context}\n"
+
     return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. specializing in **cross-contract vulnerabilities** — bugs that only manifest when analyzing how multiple contracts interact.
 
 ## Protocol Understanding
@@ -478,7 +498,7 @@ def _build_pass3_5_prompt(
 
 {previous_findings_section}## Cross-Contract Relationship Map
 {cross_contract_context}
-{related_section}
+{related_section}{skill_section}
 
 ## Contract Code
 ```solidity
@@ -627,6 +647,7 @@ def _build_pass4_prompt(
     pass2_result: str,
     pass3_findings: str = "",
     cross_contract_context: str = "",
+    skill_context: str = "",
 ) -> str:
     """Pass 4: Cross-Function Interaction Analysis."""
     previous_findings_section = ""
@@ -647,6 +668,13 @@ NOTE: Use this cross-contract context to identify cross-function interactions th
 
 """
 
+    skill_section = ""
+    if skill_context:
+        skill_section = f"""
+{skill_context}
+
+"""
+
     return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. analyzing cross-function interactions.
 
 ## Protocol Understanding
@@ -655,7 +683,7 @@ NOTE: Use this cross-contract context to identify cross-function interactions th
 ## Attack Surface & State Dependencies
 {pass2_result}
 
-{previous_findings_section}{cross_contract_section}## Contract Code
+{previous_findings_section}{cross_contract_section}{skill_section}## Contract Code
 ```solidity
 {contract_content}
 ```
@@ -758,8 +786,12 @@ def _build_pass5_prompt(
     pass3_findings: str,
     pass4_findings: str,
     exploit_patterns: str,
+    skill_context: str = "",
 ) -> str:
     """Pass 5: Adversarial Modeling."""
+    skill_section = ""
+    if skill_context:
+        skill_section = f"\n{skill_context}\n"
     return f"""You are an security auditor. Your task is to identify actual vulnerabilities to prevent LOSS only, and disclose responsibly. You think with unlimited resources and identify any bad actors who might extract maximum value from this protocol.
 
 You have:
@@ -782,6 +814,7 @@ You have:
 
 ## Known Exploit Patterns (Real-World Precedents)
 {exploit_patterns}
+{skill_section}
 
 ## Contract Code
 ```solidity
@@ -1080,6 +1113,7 @@ class DeepAnalysisEngine:
 
         # Build file context header for LLM prompts
         file_context = _build_file_context_header(contract_files)
+        skill_sections = build_skill_prompt_sections(combined_content, static_results)
 
         # Build extra LLM context from AST data
         ast_context = ""
@@ -1200,6 +1234,7 @@ class DeepAnalysisEngine:
             archetype,
             file_context=file_context,
             related_context=related_ctx_p1,
+            skill_context=skill_sections.get("pass1", ""),
         )
         if ast_context:
             pass1_prompt += f"\n\n{ast_context}"
@@ -1225,7 +1260,10 @@ class DeepAnalysisEngine:
             related_sources, related_budgets.get(2, 0), full_source=True
         )
         pass2_prompt = _build_pass2_prompt(
-            truncated_content, pass1_text, related_context=related_ctx_p2
+            truncated_content,
+            pass1_text,
+            related_context=related_ctx_p2,
+            skill_context=skill_sections.get("pass2", ""),
         )
         if taint_context:
             pass2_prompt += f"\n\n{taint_context}"
@@ -1274,6 +1312,7 @@ class DeepAnalysisEngine:
                 checklist_text,
                 file_context=file_context,
                 related_context=related_ctx_p3,
+                skill_context=skill_sections.get("pass3", ""),
             ),
             pass3_model,
             result,
@@ -1316,6 +1355,7 @@ class DeepAnalysisEngine:
                             p3_summary,
                             cc_context_text,
                             related_context=related_ctx_p35,
+                            skill_context=skill_sections.get("pass3_5", ""),
                         ),
                         pass3_5_model,
                         result,
@@ -1350,6 +1390,7 @@ class DeepAnalysisEngine:
             pass2_text,
             pass3_findings=p3_summary,
             cross_contract_context=cc_context_text,
+            skill_context=skill_sections.get("pass4", ""),
         )
         if related_ctx_p4:
             pass4_prompt += f"\n{related_ctx_p4}"
@@ -1373,6 +1414,7 @@ class DeepAnalysisEngine:
             p3_summary,
             p4_summary,
             exploit_text,
+            skill_context=skill_sections.get("pass5", ""),
         )
         # Append one-liner related contract reference for Pass 5
         related_ref_p5 = _build_related_context_section(

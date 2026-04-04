@@ -351,6 +351,16 @@ class TestCreateEnhancedAnalysisPrompt(unittest.TestCase):
         self.assertIn('"vulnerabilities"', prompt)
         self.assertIn('"gas_optimizations"', prompt)
 
+    @patch("core.enhanced_llm_analyzer.build_skill_prompt_sections")
+    def test_prompt_includes_skill_context(self, mock_skill_sections):
+        analyzer = _make_llm_analyzer(openai_key="sk-test")
+        mock_skill_sections.return_value = {
+            "one_shot": "## Additional Audit Skills\n### solidity-audit\nCheck reentrancy and access control.",
+        }
+        prompt = analyzer._create_enhanced_analysis_prompt(SAMPLE_CONTRACT, {})
+        self.assertIn("Additional Audit Skills", prompt)
+        self.assertIn("Check reentrancy and access control", prompt)
+
 
 # -------------------------------------------------------------------
 class TestCallLLM(unittest.TestCase):

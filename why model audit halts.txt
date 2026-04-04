@@ -1,0 +1,47 @@
+ If you want a robust way to prove where it is stalling, I’d test it in this order:
+
+  1. Isolate deep-analysis vs one-shot fallback.
+     Run once with the current path, then run again with deep analysis disabled if the code already has a toggle or by temporarily forcing _run_enhanced_llm_analysis() in core/enhanced_audit_engine.py to use EnhancedLLMAnalyzer only. If the one-shot path returns quickly, the
+     delay is inside the multi-pass pipeline, not the provider.
+  2. Time every stage before touching model internals.
+     Add timestamped logs around:
+
+  - _read_contract_files
+  - _run_enhanced_static_analysis
+  - _run_enhanced_llm_analysis
+  - _validate_findings
+    in core/enhanced_audit_engine.py.
+    Then inside core/deep_analysis_engine.py, log start/end and duration for:
+  - related contract resolution
+  - archetype detection/checklist generation
+  - each pass 1, 2, 3, 3.5, 4, 5
+  - parsing/merging pass results
+
+  3. Stub the LLM call to return immediately.
+     The strongest test for “not network / not provider” is to monkeypatch the LLM client call so it returns a tiny valid JSON payload instantly. If the run still takes a long time, the hang is local pre/post-processing: prompt building, context collection, static results
+     expansion, JSON parsing, validation, or report generation.
+  4. Disable expensive local enrichers one by one.
+     The likely non-network slow points before or around LLM are:
+
+  - sibling contract/context discovery in core/enhanced_audit_engine.py
+  - AST parsing
+  - taint / CFG / related contract expansion in core/deep_analysis_engine.py
+  - Aderyn subprocess in core/aderyn_adapter.py
+  - validation / PoC / DB/report layers after LLM
+    Turn them off one at a time and compare timings.
+
+  5. Capture a live stack when it “hangs”.
+     For a true stall, use one of:
+
+  - py-spy dump --pid <pid>
+  - python -X faulthandler ... and trigger a traceback dump
+  - periodic threading/asyncio task dumps
+    This will tell you whether it is waiting in a subprocess, blocked in sync file IO, stuck in JSON parsing, or sitting in a pass timeout.
+
+  6. Profile a single known contract.
+     Use one small .sol file with --no-static --no-validation first, then add stages back. That gives you a clean baseline and shows whether the issue scales with contract count/context expansion rather than with the model call.
+
+  Most likely cause from the current architecture: the deep-analysis pipeline is doing exactly what it was written to do, and the apparent “stall” is one of the strong-model passes or pre-pass context building inside core/deep_analysis_engine.py, not a deadlock.
+
+  The most useful immediate change would be stage-level timing logs plus per-pass start/end logs. That will tell you in one run whether the 20 minutes is spent in static analysis, deep-analysis setup, one specific pass, or validation. If you want, I can implement that
+  instrumentation next without changing behavior.

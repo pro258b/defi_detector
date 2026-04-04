@@ -1,4 +1,4 @@
-基础使用：
+基础使用：https://www.anthropic.com/news/claude-code-security 用这个扫描合约漏洞
 
 - pip install -r requirements.txt
 (windows需要加装 pip install windows-curses)
@@ -13,6 +13,14 @@ python aether.py
 
 选s 设置 模型 api
 
+## Pinned Aderyn
+
+- Vendored under `external/aderyn`
+- Pinned to upstream tag `aderyn-v0.6.8`
+- Custom detector added: `sensitive-setter-without-guard`
+- Build with `powershell -ExecutionPolicy Bypass -File .\scripts\build_aderyn.ps1`
+- Override binary path with `ADERYN_BINARY` if needed
+
 ## 主要改动
 已经修改setup.py可以指向env其他模型
 
@@ -24,6 +32,13 @@ python aether.py
 
   python direct_cli.py audit-dir ./contracts
 
+    python defi_scanner/direct_cli.py audit 0xYourContractAddress --timeout 1200
+
+  Requirements:
+
+  - verified source on Etherscan/BaseScan
+  - configured Etherscan API key in the existing Aether config
+
   **Only LLM analysis**
   python direct_cli.py audit-dir ./contracts --no-static --no-validation
 
@@ -32,7 +47,9 @@ python aether.py
   python view_db.py --limit 10
 
   python view_db.py --severity CRITICAL
-
+## 主要问题
+模型超时，需要gracefully parial save when time out
+最多精力是在“让提示词可以过AI的风控” （可以用隐私模型没这问题）
 ## 下一步
 可以再把 defi-security-analyst.skill.md 结合到 enhanced_llm_analyzer.py
 
@@ -44,6 +61,8 @@ python aether.py
   - Use less aggressive language in prompts
   - Check if your ANTHROPIC_BASE_URL is routing through a proxy that adds suspicious headers
 
+参考：
+可以看下这个的设计 https://github.com/gastonzarate/sharkbot ， genflow驱动， langfuse可以管理和追踪提示和提示运行， 提示词这里 https://github.com/gastonzarate/sharkbot/blob/614bf000e85f618f8601a4a6f21887779a195ca5/apps/genflows/prompts/trading_futures.txt
 
 # Aether v4.7 — Smart Contract Security Analysis Framework
 
