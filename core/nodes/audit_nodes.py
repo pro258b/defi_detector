@@ -118,13 +118,19 @@ class StaticAnalysisNode(BaseNode):
                 'vulnerabilities': [],
                 'errors': []
             }
-            aderyn_target = self._select_aderyn_target(contract_files)
-            if aderyn_target:
+            aderyn_scan = self._select_aderyn_target(contract_files)
+            if aderyn_scan:
                 print("ðŸ¦… Running external Aderyn analysis...")
                 try:
+                    aderyn_target = aderyn_scan['target_path']
                     aderyn_classification = classify_project_for_aderyn(aderyn_target)
                     aderyn_adapter = AderynAdapter()
-                    aderyn_run = aderyn_adapter.run(aderyn_target)
+                    aderyn_run = aderyn_adapter.run(
+                        aderyn_target,
+                        src=aderyn_scan.get('src'),
+                        path_includes=aderyn_scan.get('path_includes'),
+                        path_excludes=aderyn_scan.get('path_excludes'),
+                    )
                     if aderyn_run.success:
                         filtered_findings = filter_aderyn_findings_for_project(
                             aderyn_run.normalized_findings,
@@ -201,8 +207,8 @@ class StaticAnalysisNode(BaseNode):
                 error=str(e)
             )
 
-    def _select_aderyn_target(self, contract_files: List[Any]) -> Optional[str]:
-        """Choose the best filesystem target to hand to Aderyn."""
+    def _select_aderyn_target(self, contract_files: List[Any]) -> Optional[Dict[str, Any]]:
+        """Choose a stable Aderyn scan config rooted at the actual Solidity project."""
         paths: List[Path] = []
         for item in contract_files:
             if isinstance(item, (list, tuple)) and item:
@@ -213,20 +219,67 @@ class StaticAnalysisNode(BaseNode):
                 candidate = None
 
             if candidate:
-                paths.append(Path(candidate).resolve())
+                path_obj = Path(candidate).resolve()
+                path_parts = {part.lower() for part in path_obj.parts}
+                if 'test' in path_parts or 'script' in path_parts:
+                    continue
+                paths.append(path_obj)
 
         if not paths:
             return None
 
-        parent_dirs = {path.parent for path in paths}
-        if len(parent_dirs) == 1:
-            return str(next(iter(parent_dirs)))
+        root_path = self._detect_aderyn_project_root(paths)
+        return {
+            'target_path': str(root_path),
+            'src': self._infer_aderyn_src(root_path, paths),
+            'path_includes': self._build_aderyn_includes(root_path, paths) or None,
+            'path_excludes': ['test/**', 'script/**', 'lib/**', 'node_modules/**', 'out/**', 'cache/**', 'broadcast/**'],
+        }
 
-        common_path = os.path.commonpath([str(path) for path in paths])
-        if common_path and os.path.isdir(common_path):
-            return common_path
+    def _detect_aderyn_project_root(self, paths: List[Path]) -> Path:
+        """Detect the best project root for Aderyn invocation."""
+        markers = ('foundry.toml', 'remappings.txt', 'hardhat.config.js', 'hardhat.config.ts', 'package.json')
 
-        return str(paths[0].parent)
+        for candidate in [paths[0].parent, *paths[0].parents]:
+            if any((candidate / marker).exists() for marker in markers):
+                return candidate
+
+        common_path = Path(os.path.commonpath([str(path) for path in paths]))
+        return common_path if common_path.is_dir() else paths[0].parent
+
+    def _build_aderyn_includes(self, root_path: Path, paths: List[Path]) -> List[str]:
+        """Restrict Aderyn to the production Solidity files selected for this audit."""
+        includes: List[str] = []
+        for path in paths:
+            try:
+                rel_path = path.relative_to(root_path).as_posix()
+            except ValueError:
+                rel_path = path.name
+            includes.append(rel_path)
+        return sorted(set(includes))
+
+    def _infer_aderyn_src(self, root_path: Path, paths: List[Path]) -> Optional[str]:
+        """Infer the Solidity source directory for project-root Aderyn runs."""
+        top_level_parts: List[str] = []
+        for path in paths:
+            try:
+                relative_parts = path.relative_to(root_path).parts
+            except ValueError:
+                continue
+            if relative_parts:
+                top_level_parts.append(relative_parts[0])
+
+        if not top_level_parts:
+            return None
+
+        common_top = top_level_parts[0]
+        if all(part == common_top for part in top_level_parts):
+            return common_top
+
+        if 'src' in top_level_parts:
+            return 'src'
+
+        return None
 
     async def _run_mythril_placeholder(self, contract_path: str) -> Dict[str, Any]:
         """Placeholder - Mythril removed due to Python 3.12 compatibility."""

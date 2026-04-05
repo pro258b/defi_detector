@@ -1,8 +1,9 @@
 基础使用：https://www.anthropic.com/news/claude-code-security 用这个扫描合约漏洞
 
 - pip install -r requirements.txt
-(windows需要加装 pip install windows-curses)
+(windows需要加装 pip install windows-curses,因为需要foundry，只能用git bash)
 
+- 安foundry
 - 设置好.env
 
 - python setup.py (会生成 Path.home() / '.aether/config.yaml')
@@ -28,7 +29,7 @@ python aether.py
 
 如果windows导致TUI curse不返回，用直接用法 
 
-  python direct_cli.py audit contract.sol
+  %USERPROFILE%\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe direct_cli.py audit direct_cli.py audit contract.sol
 
   python direct_cli.py audit-dir ./contracts
 
