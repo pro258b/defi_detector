@@ -80,7 +80,7 @@ class EnhancedLLMAnalyzer:
 
         # Updated fallback models to include Gemini and Anthropic
         self.fallback_models = [
-            "claude-sonnet-4-5-20250929",
+            "claude-sonnet-4-20250514",
             "gemini-2.5-flash",
             "gpt-4o-mini",
             "gpt-4.1-mini",
@@ -122,7 +122,7 @@ class EnhancedLLMAnalyzer:
             "gemini-1.5-flash": 1000000,  # 1M tokens combined
             # Anthropic Claude models (200K context)
             "claude-opus-4-6": 200000,  # 200k tokens
-            "claude-sonnet-4-5-20250929": 200000,  # 200k tokens
+            "claude-sonnet-4-20250514": 200000,  # 200k tokens
             "claude-haiku-4-5-20251001": 200000,  # 200k tokens
         }
 

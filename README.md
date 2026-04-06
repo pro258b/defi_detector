@@ -5,6 +5,7 @@
 
 - 安foundry
 - 设置好.env
+- core/config_manager needs to specify model names supported by .env 
 
 - python setup.py (会生成 Path.home() / '.aether/config.yaml')
 

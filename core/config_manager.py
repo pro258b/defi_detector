@@ -88,11 +88,15 @@ class AetherConfig:
 
     # Anthropic Model selection (Claude models - 200K context, extended thinking)
     # Validation model - Claude Sonnet for fast, accurate validation
-    anthropic_validation_model: str = "claude-sonnet-4-5-20250929"
+    anthropic_validation_model: str = (
+        "claude-sonnet-4-20250514"  # "claude-sonnet-4-5-20250929"
+    )
     # Analysis model - Claude Opus for deepest vulnerability analysis
     anthropic_analysis_model: str = "claude-opus-4-6"
     # Generation model - Claude Sonnet for balanced PoC generation
-    anthropic_generation_model: str = "claude-sonnet-4-5-20250929"
+    anthropic_generation_model: str = (
+        "claude-sonnet-4-20250514"  # "claude-sonnet-4-5-20250929"
+    )
 
     # AI Ensemble Agent Models (individual specialist agents)
     # Each agent can use a different model for specialized analysis
@@ -173,7 +177,7 @@ def get_model_for_task(task_type: str) -> str:
             if provider == "gemini":
                 model = "gemini-2.5-flash"
             elif provider == "anthropic":
-                model = "claude-sonnet-4-5-20250929"
+                model = "claude-sonnet-4-20250514"  # "claude-sonnet-4-5-20250929"
             else:
                 model = (
                     "gpt-5-chat-latest"
